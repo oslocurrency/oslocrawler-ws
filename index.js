@@ -20,7 +20,7 @@ const knex = require("knex")({
 /** End Configuration **/
 
 // We don't actually need to talk to Nano, just need the converter
-const Nano = require("nanode");
+const Nano = require("nanode").Nano;
 const nano = new Nano({ url: "http://localhost:9999" });
 
 const express = require("express");
