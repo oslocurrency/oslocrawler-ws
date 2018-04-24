@@ -1,4 +1,4 @@
-require('dotenv').config(); // Load variables from .env into the environment
+require("dotenv").config(); // Load variables from .env into the environment
 
 /** Configuration **/
 const websocketPort = 3333; // Port that the websocket server will listen on (For incoming wallet connections)
@@ -6,21 +6,25 @@ const webserverPort = 9960; // Port that the webserver will listen on (For recei
 const statTime = 10; // Seconds between reporting statistics to console (Connected clients, TPS)
 
 // Set up connection to PostgreSQL server used for storing timestamps (Will fail safely if not used)
-const knex = require('knex')({
-  client: 'pg',
+const knex = require("knex")({
+  client: "pg",
   connection: {
-    host : process.env.DB_HOST,
+    host: process.env.DB_HOST,
     port: process.env.DB_PORT,
-    user : process.env.DB_USER,
-    password : process.env.DB_PASS ? process.env.DB_PASS : '',
-    database : process.env.DB_NAME
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS ? process.env.DB_PASS : "",
+    database: process.env.DB_NAME
   }
 });
 
 /** End Configuration **/
 
-const express = require('express');
-const WebSocketServer = require('uws').Server;
+// We don't actually need to talk to Nano, just need the converter
+const Nano = require("nanode");
+const nano = new Nano({ url: "http://localhost:9999" });
+
+const express = require("express");
+const WebSocketServer = require("uws").Server;
 const app = express();
 const wss = new WebSocketServer({ port: websocketPort });
 
@@ -30,12 +34,12 @@ const subscriptionMap = {};
 let tpsCount = 0;
 
 app.use((req, res, next) => {
-  if (req.headers['content-type']) return next();
-  req.headers['content-type'] = 'application/json';
+  if (req.headers["content-type"]) return next();
+  req.headers["content-type"] = "application/json";
   next();
 });
 app.use(express.json());
-app.post('/api/new-block', (req, res) => {
+app.post("/api/new-block", (req, res) => {
   res.sendStatus(200);
   console.log(`Received block`);
   tpsCount++;
@@ -43,15 +47,18 @@ app.post('/api/new-block', (req, res) => {
   const fullBlock = req.body;
   try {
     fullBlock.block = JSON.parse(fullBlock.block);
-    saveHashTimestamp(fullBlock.hash);
+    fullBlock.block.account = fullBlock.account;
+    fullBlock.block.hash = fullBlock.hash;
+    fullBlock.block.amount = nano.convert.fromRaw(fullBlock.amount, "mrai");
+    // saveHashTimestamp(fullBlock.hash);
   } catch (err) {
     return console.log(`Error parsing block data! `, err.message);
   }
 
   let destinations = [];
 
-  if (fullBlock.block.type === 'state') {
-    if (fullBlock.is_send === 'true' && fullBlock.block.link_as_account) {
+  if (fullBlock.block.type === "state") {
+    if (fullBlock.is_send === "true" && fullBlock.block.link_as_account) {
       destinations.push(fullBlock.block.link_as_account);
     }
     destinations.push(fullBlock.account);
@@ -68,7 +75,7 @@ app.post('/api/new-block', (req, res) => {
 
     subscriptionMap[destination].forEach(ws => {
       const event = {
-        event: 'newTransaction',
+        event: "newTransaction",
         data: fullBlock
       };
       ws.send(JSON.stringify(event));
@@ -76,16 +83,16 @@ app.post('/api/new-block', (req, res) => {
   });
 });
 
-app.get('/health-check', (req, res) => {
+app.get("/health-check", (req, res) => {
   res.sendStatus(200);
 });
 
 app.listen(webserverPort, () => console.log(`Express server online`));
 
-wss.on('connection', function(ws) {
+wss.on("connection", function(ws) {
   ws.subscriptions = [];
   console.log(`Got new connection! `, ws);
-  ws.on('message', message => {
+  ws.on("message", message => {
     try {
       const event = JSON.parse(message);
       console.log(`Got event`, event);
@@ -94,12 +101,14 @@ wss.on('connection', function(ws) {
       console.log(`Bad message: `, err);
     }
   });
-  ws.on('close', event => {
+  ws.on("close", event => {
     console.log(`Connection closed, unsubscribing`);
     ws.subscriptions.forEach(account => {
       if (!subscriptionMap[account] || !subscriptionMap[account].length) return; // Not in there for some reason?
 
-      subscriptionMap[account] = subscriptionMap[account].filter(subWs => subWs !== ws);
+      subscriptionMap[account] = subscriptionMap[account].filter(
+        subWs => subWs !== ws
+      );
 
       if (subscriptionMap[account].length === 0) {
         delete subscriptionMap[account];
@@ -112,9 +121,9 @@ async function saveHashTimestamp(hash) {
   console.log(`Saving hash... `, hash);
   const d = new Date();
   try {
-    await knex('timestamps').insert({
+    await knex("timestamps").insert({
       hash,
-      timestamp: d.getTime() + (d.getTimezoneOffset() * 60 * 1000), // Get milliseconds in UTC
+      timestamp: d.getTime() + d.getTimezoneOffset() * 60 * 1000 // Get milliseconds in UTC
     });
   } catch (err) {
     console.log(`Error saving hash timestamp:`, err.message, err);
@@ -123,10 +132,10 @@ async function saveHashTimestamp(hash) {
 
 function parseEvent(ws, event) {
   switch (event.event) {
-    case 'subscribe':
+    case "subscribe":
       subscribeAccounts(ws, event.data);
       break;
-    case 'unsubscribe':
+    case "unsubscribe":
       unsubscribeAccounts(ws, event.data);
       break;
   }
@@ -157,7 +166,10 @@ function unsubscribeAccounts(ws, accounts) {
 
     const globalIndex = subscriptionMap[account].indexOf(ws);
     if (globalIndex === -1) {
-      console.log(`Subscribe, not found in the global map?  Potential leak? `, account);
+      console.log(
+        `Subscribe, not found in the global map?  Potential leak? `,
+        account
+      );
       return;
     }
 
