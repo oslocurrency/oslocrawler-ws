@@ -58,13 +58,10 @@ app.post("/api/new-block", (req, res) => {
   let destinations = [];
 
   if (fullBlock.block.type === "state") {
-    if (fullBlock.is_send === "true" && fullBlock.block.link_as_account) {
-      destinations.push(fullBlock.block.link_as_account);
-    }
     destinations.push(fullBlock.account);
     console.log(`Got state block: `, fullBlock);
   } else {
-    destinations.push(fullBlock.block.destination);
+    destinations.push(fullBlock.block.account);
   }
 
   // Send it to all!
