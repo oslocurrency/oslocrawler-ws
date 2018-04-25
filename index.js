@@ -55,7 +55,8 @@ app.post("/api/new-block", (req, res) => {
     return console.log(`Error parsing block data! `, err.message);
   }
 
-  let destinations = [];
+  // Special all destination that broadcasts all new blocks
+  let destinations = ["all"];
 
   if (fullBlock.block.type === "state") {
     destinations.push(fullBlock.account);
