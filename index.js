@@ -62,7 +62,7 @@ app.post("/api/new-block", (req, res) => {
     destinations.push(fullBlock.account);
     console.log(`Got state block: `, fullBlock);
   } else {
-    destinations.push(fullBlock.block.account);
+    destinations.push(fullBlock.account);
   }
 
   // Send it to all!
