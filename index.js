@@ -35,13 +35,15 @@ app.post("/api/new-block", (req, res) => {
   console.log(`Received block`);
   tpsCount++;
 
+  const d = new Date();
   const fullBlock = req.body;
+  fullBlock.timestamp = d.getTime();
   try {
     fullBlock.block = JSON.parse(fullBlock.block);
     fullBlock.block.account = fullBlock.account;
     fullBlock.block.hash = fullBlock.hash;
     fullBlock.block.amount = nano.convert.fromRaw(fullBlock.amount, "mrai");
-    saveHashTimestamp(fullBlock.hash);
+    saveHashTimestamp(fullBlock);
   } catch (err) {
     return console.log(`Error parsing block data! `, err.message);
   }
@@ -106,12 +108,12 @@ wss.on("connection", function(ws) {
   });
 });
 
-async function saveHashTimestamp(hash) {
-  console.log(`Saving hash... `, hash);
+async function saveHashTimestamp(block) {
+  console.log(`Saving hash... `, block.hash);
   const d = new Date();
   try {
     // Get milliseconds in UTC
-    redisClient.setnx(`block_timestamp/${hash}`, d.getTime());
+    redisClient.setnx(`block_timestamp/${block.hash}`, block.timestamp);
   } catch (err) {
     console.log(`Error saving hash timestamp:`, err.message, err);
   }
