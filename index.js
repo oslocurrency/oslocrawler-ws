@@ -111,10 +111,7 @@ async function saveHashTimestamp(hash) {
   const d = new Date();
   try {
     // Get milliseconds in UTC
-    redisClient.setnx(
-      `block_timestamp/${hash}`,
-      d.getTime() + d.getTimezoneOffset() * 60 * 1000
-    );
+    redisClient.setnx(`block_timestamp/${hash}`, d.getTime());
   } catch (err) {
     console.log(`Error saving hash timestamp:`, err.message, err);
   }
