@@ -5,17 +5,8 @@ const websocketPort = 3333; // Port that the websocket server will listen on (Fo
 const webserverPort = 9960; // Port that the webserver will listen on (For receiving new blocks from Nano node)
 const statTime = 10; // Seconds between reporting statistics to console (Connected clients, TPS)
 
-// Set up connection to PostgreSQL server used for storing timestamps (Will fail safely if not used)
-const knex = require("knex")({
-  client: "pg",
-  connection: {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASS ? process.env.DB_PASS : "",
-    database: process.env.DB_NAME
-  }
-});
+const redis = require("redis");
+const redisClient = redis.createClient();
 
 /** End Configuration **/
 
@@ -50,7 +41,7 @@ app.post("/api/new-block", (req, res) => {
     fullBlock.block.account = fullBlock.account;
     fullBlock.block.hash = fullBlock.hash;
     fullBlock.block.amount = nano.convert.fromRaw(fullBlock.amount, "mrai");
-    // saveHashTimestamp(fullBlock.hash);
+    saveHashTimestamp(fullBlock.hash);
   } catch (err) {
     return console.log(`Error parsing block data! `, err.message);
   }
@@ -119,10 +110,11 @@ async function saveHashTimestamp(hash) {
   console.log(`Saving hash... `, hash);
   const d = new Date();
   try {
-    await knex("timestamps").insert({
-      hash,
-      timestamp: d.getTime() + d.getTimezoneOffset() * 60 * 1000 // Get milliseconds in UTC
-    });
+    // Get milliseconds in UTC
+    redisClient.set(
+      `block_timestamp/${hash}`,
+      d.getTime() + d.getTimezoneOffset() * 60 * 1000
+    );
   } catch (err) {
     console.log(`Error saving hash timestamp:`, err.message, err);
   }
