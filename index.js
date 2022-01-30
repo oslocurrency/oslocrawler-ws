@@ -6,7 +6,23 @@ const webserverPort = 9960; // Port that the webserver will listen on (For recei
 const statTime = 10; // Seconds between reporting statistics to console (Connected clients, TPS)
 
 const redis = require("redis");
-const redisClient = redis.createClient();
+
+const redisNamespace = process.env.REDIS_NAMESPACE || "crawler";
+
+var redisURL = "redis://localhost:6379";
+
+if (process.env.REDIS_HOST || process.env.REDIS_PORT || process.env.REDIS_PASSWORD) {
+  const host = process.env.REDIS_HOST || "localhost";
+  const port = parseInt(process.env.REDIS_PORT) || "6379";
+  const password = process.env.REDIS_PASSWORD;
+  const auth = password ? `redis:${password}@` : "";
+
+  redisURL = `redis://${auth}${host}:${port}`
+}
+
+const redisClient = redis.createClient({
+  url: redisURL
+});
 
 /** End Configuration **/
 
@@ -42,7 +58,7 @@ app.post("/api/new-block", (req, res) => {
     fullBlock.block = JSON.parse(fullBlock.block);
     fullBlock.block.account = fullBlock.account;
     fullBlock.block.hash = fullBlock.hash;
-    fullBlock.block.amount = nano.convert.fromRaw(fullBlock.amount, "mrai");
+    fullBlock.block.amount = fullBlock.amount;
     saveHashTimestamp(fullBlock);
   } catch (err) {
     return console.log(`Error parsing block data! `, err.message);
@@ -113,7 +129,7 @@ async function saveHashTimestamp(block) {
   const d = new Date();
   try {
     // Get milliseconds in UTC
-    redisClient.setnx(`block_timestamp/${block.hash}`, block.timestamp);
+    redisClient.setnx(`${redisNamespace}/block_timestamp/${block.hash}`, block.timestamp);
   } catch (err) {
     console.log(`Error saving hash timestamp:`, err.message, err);
   }
